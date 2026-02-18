@@ -1,0 +1,42 @@
+# Credentials and sensitive files
+credentials.json
+nhsjobscraper-*.json
+*.json.backup
+
+# Environment files
+.env
+.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.eggs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.DS_Store?
+
+# Logs
+*.log
+logs/
+
+# Scraped data (optional - remove if you want to commit)
+*.html
+demo_results.json
+extracted_job_data.json
+seen_jobs.json
