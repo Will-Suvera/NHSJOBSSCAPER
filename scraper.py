@@ -3,6 +3,7 @@
 import re
 import time
 import logging
+import urllib.parse
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone
@@ -193,7 +194,7 @@ def _scrape_keyword(keyword, session, title_filter=None):
         if page > 1:
             params["page"] = page
 
-        url = SEARCH_URL + "?" + "&".join(f"{k}={v}" for k, v in params.items())
+        url = SEARCH_URL + "?" + urllib.parse.urlencode(params)
         logger.info(f"[{keyword}] Scraping page {page}")
 
         resp = _fetch(url, session)

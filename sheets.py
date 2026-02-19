@@ -79,8 +79,15 @@ def append_jobs(credentials_json, spreadsheet_id, jobs):
 
     rows = []
     for job in jobs:
-        rows.append([job.get(col, "") for col in COLUMNS])
+        row = []
+        for col in COLUMNS:
+            val = job.get(col, "")
+            # Prefix phone numbers with ' to force text in Sheets (preserves leading 0)
+            if col == "contact_phone" and val and str(val)[0:1].isdigit():
+                val = "'" + str(val)
+            row.append(val)
+        rows.append(row)
 
-    worksheet.append_rows(rows)
+    worksheet.append_rows(rows, value_input_option="USER_ENTERED")
     logger.info(f"Appended {len(rows)} new jobs to sheet")
     return url
