@@ -184,7 +184,10 @@ SEARCH_KEYWORDS = [
 ]
 
 # Only keep jobs matching these roles (checked against title, case-insensitive)
-ALLOWED_ROLES = ["pharmacist", "pharmacy technician", "gp", "general practitioner", "practice nurse"]
+ALLOWED_ROLES = [
+    "pharmacist", "pharmacy technician", "gp", "general practitioner",
+    "practice nurse", "practice manager", "business manager",
+]
 
 # Exclude hospital/trust employers
 EXCLUDE_EMPLOYER = ["trust"]

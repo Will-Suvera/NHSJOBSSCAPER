@@ -19,6 +19,8 @@ ROLE_CATEGORIES = [
     ("physiotherapist", "Physiotherapist"),
     ("physio", "Physiotherapist"),
     ("social prescri", "Social Prescriber"),
+    ("practice manager", "Practice Manager"),
+    ("business manager", "Business Manager"),
 ]
 
 
