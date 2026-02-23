@@ -1,7 +1,7 @@
 name: NHS ARRS Scraper
 on:
   schedule:
-    - cron: '0 6 * * *'  # 6am UTC = 7am BST (summer) / 6am GMT (winter)
+    - cron: '0 6 * * 1-5'  # Mon-Fri 6am UTC = 7am BST (summer) / 6am GMT (winter)
   workflow_dispatch: {}    # Manual trigger
 
 jobs:

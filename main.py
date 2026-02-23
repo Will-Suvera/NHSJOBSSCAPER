@@ -31,9 +31,13 @@ def main():
         sys.exit(1)
 
     try:
-        # 1. Scrape all listings across keywords
-        logger.info("Step 1: Scraping NHS Jobs...")
-        jobs = scrape_all_jobs()
+        # 1. Get existing job IDs from Google Sheet (do this first to skip known detail pages)
+        logger.info("Step 1: Checking sheet for existing jobs...")
+        existing_ids, sheet_url = get_existing_job_ids(credentials_json, spreadsheet_id)
+
+        # 2. Scrape all listings, skipping detail pages for known jobs
+        logger.info("Step 2: Scraping NHS Jobs...")
+        jobs = scrape_all_jobs(known_ids=existing_ids)
         logger.info(f"Scraped {len(jobs)} unique jobs")
 
         if not jobs:
@@ -41,10 +45,6 @@ def main():
             if slack_url:
                 send_error(slack_url, "Scraper returned 0 jobs — this may indicate a problem")
             return
-
-        # 2. Get existing job IDs from Google Sheet
-        logger.info("Step 2: Checking sheet for existing jobs...")
-        existing_ids, sheet_url = get_existing_job_ids(credentials_json, spreadsheet_id)
 
         # 3. Filter to only new jobs
         new_jobs = [j for j in jobs if j.get("job_id") and j["job_id"] not in existing_ids]
@@ -57,12 +57,13 @@ def main():
         else:
             logger.info("Step 4: Nothing to append")
 
-        # 5. Send Slack summary
+        # 5. Send Slack notification
         if slack_url:
             logger.info("Step 5: Sending Slack notification...")
             send_update(slack_url, new_jobs, len(jobs), sheet_url)
         else:
             logger.info("Step 5: Slack not configured, skipping")
+            logger.info("Set SLACK_WEBHOOK_URL secret to enable notifications")
 
         logger.info("Done.")
 

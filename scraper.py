@@ -183,6 +183,29 @@ SEARCH_KEYWORDS = [
     {"keyword": "Practice Nurse", "title_filter": "practice nurse"},
 ]
 
+# Only keep jobs matching these roles (checked against title, case-insensitive)
+ALLOWED_ROLES = ["pharmacist", "pharmacy technician", "gp", "general practitioner", "practice nurse"]
+
+# Exclude hospital/trust employers
+EXCLUDE_EMPLOYER = ["trust"]
+
+
+def _is_excluded(job):
+    """Return True if job should be filtered out."""
+    title = job.get("title", "").lower()
+    employer = job.get("employer", "").lower()
+
+    # Must match at least one allowed role
+    if not any(role in title for role in ALLOWED_ROLES):
+        return True
+
+    # No hospital/trust employers
+    for term in EXCLUDE_EMPLOYER:
+        if term in employer:
+            return True
+
+    return False
+
 
 def _scrape_keyword(keyword, session, title_filter=None):
     """Scrape up to MAX_PAGES for a single keyword. Returns list of job dicts."""
@@ -210,6 +233,8 @@ def _scrape_keyword(keyword, session, title_filter=None):
             if job:
                 if title_filter and title_filter not in job.get("title", "").lower():
                     continue
+                if _is_excluded(job):
+                    continue
                 jobs.append(job)
 
         logger.info(f"[{keyword}] Page {page}: {len(elements)} results, {len(jobs)} kept")
@@ -226,8 +251,16 @@ def _scrape_keyword(keyword, session, title_filter=None):
     return jobs
 
 
-def scrape_all_jobs():
-    """Scrape all keywords, deduplicate by job_id, fetch detail pages. Returns list of job dicts."""
+def scrape_all_jobs(known_ids=None):
+    """Scrape all keywords, deduplicate by job_id, fetch detail pages.
+
+    known_ids: set of job IDs already in the sheet. Detail pages are only
+    fetched for NEW jobs (not in known_ids), which cuts runtime dramatically
+    on repeat runs.
+    """
+    if known_ids is None:
+        known_ids = set()
+
     session = requests.Session()
     session.headers.update(HEADERS)
 
@@ -251,13 +284,18 @@ def scrape_all_jobs():
 
     logger.info(f"Total unique jobs from search results: {len(all_jobs)}")
 
-    # --- Detail pages ---
-    for idx, job in enumerate(all_jobs, 1):
+    # --- Detail pages (only for new jobs) ---
+    new_jobs = [j for j in all_jobs if j.get("job_id") not in known_ids]
+    skipped = len(all_jobs) - len(new_jobs)
+    if skipped:
+        logger.info(f"Skipping detail pages for {skipped} jobs already in sheet")
+
+    for idx, job in enumerate(new_jobs, 1):
         job_url = job.get("job_url")
         if not job_url:
             continue
 
-        logger.info(f"Detail page {idx}/{len(all_jobs)}: {job.get('title', '?')}")
+        logger.info(f"Detail page {idx}/{len(new_jobs)}: {job.get('title', '?')}")
 
         if idx > 1:
             time.sleep(REQUEST_DELAY)
@@ -273,8 +311,8 @@ def scrape_all_jobs():
 
     # Add first_seen timestamp
     now = datetime.now(timezone.utc).isoformat()
-    for job in all_jobs:
+    for job in new_jobs:
         job["first_seen"] = now
 
-    logger.info(f"Scraping complete: {len(all_jobs)} jobs processed")
+    logger.info(f"Scraping complete: {len(all_jobs)} total, {len(new_jobs)} new")
     return all_jobs
