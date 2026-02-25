@@ -192,6 +192,13 @@ ALLOWED_ROLES = [
 # Exclude hospital/trust employers
 EXCLUDE_EMPLOYER = ["trust"]
 
+# Exclude agency contact emails (filtered after detail page fetch)
+EXCLUDE_EMAILS = [
+    "recruitment@thepharmacistnetwork.co.uk",
+    "primarycarefcp.talent@nhs.net",
+    "enquiries@eoeprimarycarecareers.nhs.uk",
+]
+
 
 def _is_excluded(job):
     """Return True if job should be filtered out."""
@@ -312,10 +319,20 @@ def scrape_all_jobs(known_ids=None):
         details = _extract_detail(detail_soup)
         job.update(details)
 
+    # Remove agency listings (contact email only available after detail fetch)
+    before = len(new_jobs)
+    new_jobs = [j for j in new_jobs if j.get("contact_email", "").lower() not in EXCLUDE_EMAILS]
+    if before - len(new_jobs):
+        logger.info(f"Filtered out {before - len(new_jobs)} agency listings by email")
+
     # Add first_seen timestamp
     now = datetime.now(timezone.utc).isoformat()
     for job in new_jobs:
         job["first_seen"] = now
+
+    # Rebuild all_jobs: known jobs + filtered new jobs
+    known_jobs = [j for j in all_jobs if j.get("job_id") in known_ids]
+    all_jobs = known_jobs + new_jobs
 
     logger.info(f"Scraping complete: {len(all_jobs)} total, {len(new_jobs)} new")
     return all_jobs
