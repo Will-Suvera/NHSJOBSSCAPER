@@ -190,7 +190,7 @@ ALLOWED_ROLES = [
 ]
 
 # Exclude hospital/trust employers
-EXCLUDE_EMPLOYER = ["trust"]
+EXCLUDE_EMPLOYER = ["trust", "hospital"]
 
 # Exclude agency contact emails (filtered after detail page fetch)
 EXCLUDE_EMAILS = [
