@@ -192,12 +192,18 @@ ALLOWED_ROLES = [
 # Exclude hospital/trust employers
 EXCLUDE_EMPLOYER = ["trust", "hospital"]
 
-# Exclude agency contact emails (filtered after detail page fetch)
+# Exclude agency/recruiter contact emails (filtered after detail page fetch)
 EXCLUDE_EMAILS = [
     "recruitment@thepharmacistnetwork.co.uk",
     "primarycarefcp.talent@nhs.net",
     "enquiries@eoeprimarycarecareers.nhs.uk",
+    "hr@pcmsolutions.co.uk",
+    "recruitment@practiceindex.co.uk",
+    "apply@virtualpharmacist.co.uk",
 ]
+
+# Exclude emails containing these keywords (catches e.g. wales.nhs.uk)
+EXCLUDE_EMAIL_KEYWORDS = ["wales"]
 
 
 def _is_excluded(job):
@@ -320,10 +326,16 @@ def scrape_all_jobs(known_ids=None):
         job.update(details)
 
     # Remove agency listings (contact email only available after detail fetch)
+    def _email_excluded(email):
+        email = email.lower()
+        if email in EXCLUDE_EMAILS:
+            return True
+        return any(kw in email for kw in EXCLUDE_EMAIL_KEYWORDS)
+
     before = len(new_jobs)
-    new_jobs = [j for j in new_jobs if j.get("contact_email", "").lower() not in EXCLUDE_EMAILS]
+    new_jobs = [j for j in new_jobs if not _email_excluded(j.get("contact_email", ""))]
     if before - len(new_jobs):
-        logger.info(f"Filtered out {before - len(new_jobs)} agency listings by email")
+        logger.info(f"Filtered out {before - len(new_jobs)} agency/excluded listings by email")
 
     # Add first_seen timestamp
     now = datetime.now(timezone.utc).isoformat()
