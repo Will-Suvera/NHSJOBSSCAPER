@@ -96,8 +96,10 @@ def _format_job(job):
     return "\n".join(lines)
 
 
-def send_update(webhook_url, new_jobs, total_active, sheet_url):
+def send_update(webhook_url, new_jobs, total_active, sheet_url, emailed_ids=None):
     """Send summary message, then one message per new job."""
+    if emailed_ids is None:
+        emailed_ids = set()
     today = datetime.now().strftime("%-d %b %Y")
     count = len(new_jobs)
 
@@ -110,6 +112,7 @@ def send_update(webhook_url, new_jobs, total_active, sheet_url):
         return _post(webhook_url, {"text": text})
 
     # --- Summary message ---
+    emailed_count = sum(1 for j in new_jobs if j.get("job_id") in emailed_ids)
     cats = Counter(_categorise(j.get("title", "")) for j in new_jobs)
     breakdown_lines = []
     for cat, n in cats.most_common():
@@ -121,6 +124,10 @@ def send_update(webhook_url, new_jobs, total_active, sheet_url):
         f":hospital: *NHS Jobs Daily Update — {today}*\n\n"
         f"*{count} new role{'s' if count != 1 else ''}* found today:\n"
         f"```{breakdown}```\n"
+    )
+    if emailed_count:
+        summary += f":white_check_mark: Auto-email sent to {emailed_count} contact{'s' if emailed_count != 1 else ''}\n"
+    summary += (
         f"_{total_active} active listings tracked_\n"
         f"<{sheet_url}|:bar_chart: View full tracker>"
     )
@@ -130,7 +137,8 @@ def send_update(webhook_url, new_jobs, total_active, sheet_url):
     for i, job in enumerate(new_jobs):
         if i > 0:
             time.sleep(1)  # respect Slack rate limits
-        text = _format_job(job)
+        prefix = ":white_check_mark: " if job.get("job_id") in emailed_ids else ""
+        text = prefix + _format_job(job)
         _post(webhook_url, {"text": text})
         logger.info(f"Sent Slack message {i + 1}/{count}")
 

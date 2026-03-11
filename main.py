@@ -7,6 +7,7 @@ import logging
 
 from scraper import scrape_all_jobs
 from sheets import get_existing_job_ids, append_jobs
+from hubspot import push_contacts
 from notifier import send_update, send_error
 
 logging.basicConfig(
@@ -22,6 +23,7 @@ def main():
     credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
     spreadsheet_id = os.getenv("SPREADSHEET_ID", "")
     slack_url = os.getenv("SLACK_WEBHOOK_URL", "")
+    hubspot_key = os.getenv("HUBSPOT_API_KEY", "")
 
     if not credentials_json:
         logger.error("GOOGLE_CREDENTIALS_JSON not set")
@@ -57,13 +59,21 @@ def main():
         else:
             logger.info("Step 4: Nothing to append")
 
-        # 5. Send Slack notification
+        # 5. Push contacts to HubSpot
+        emailed_ids = set()
+        if hubspot_key and new_jobs:
+            logger.info("Step 5: Pushing contacts to HubSpot...")
+            emailed_ids = push_contacts(hubspot_key, new_jobs)
+            logger.info(f"Pushed {len(emailed_ids)} contacts to HubSpot outreach list")
+        elif not hubspot_key:
+            logger.info("Step 5: HubSpot not configured, skipping")
+
+        # 6. Send Slack notification
         if slack_url:
-            logger.info("Step 5: Sending Slack notification...")
-            send_update(slack_url, new_jobs, len(jobs), sheet_url)
+            logger.info("Step 6: Sending Slack notification...")
+            send_update(slack_url, new_jobs, len(jobs), sheet_url, emailed_ids=emailed_ids)
         else:
-            logger.info("Step 5: Slack not configured, skipping")
-            logger.info("Set SLACK_WEBHOOK_URL secret to enable notifications")
+            logger.info("Step 6: Slack not configured, skipping")
 
         logger.info("Done.")
 
