@@ -183,9 +183,11 @@ def send_update(slack_config, new_jobs, total_active, sheet_url, emailed_ids=Non
 
         if is_bot:
             ts = _post(slack_config, text)
-            # Add ✅ reaction if this contact was emailed
-            if ts and job.get("job_id") in emailed_ids:
-                _react(slack_config, ts)
+            if ts:
+                if job.get("job_id") in emailed_ids:
+                    _react(slack_config, ts, "white_check_mark")
+                else:
+                    _react(slack_config, ts, "mag")
         else:
             _post_webhook(slack_config, text)
 
