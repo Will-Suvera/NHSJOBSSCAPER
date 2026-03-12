@@ -28,7 +28,7 @@ def _split_name(full_name):
     while parts and parts[0].lower().rstrip(".") in titles:
         parts.pop(0)
     if not parts:
-        return full_name.strip(), ""
+        return "", ""
     if len(parts) == 1:
         return parts[0], ""
     return parts[0], " ".join(parts[1:])
@@ -115,13 +115,26 @@ def push_contacts(api_key, jobs):
     """
     pushed_ids = set()
     contact_ids = []
+    seen_emails = set()
 
     for job in jobs:
-        email = job.get("contact_email", "").strip()
+        email = job.get("contact_email", "").strip().lower()
         if not email:
             continue
 
+        # Skip duplicate emails across jobs
+        if email in seen_emails:
+            pushed_ids.add(job.get("job_id"))
+            continue
+        seen_emails.add(email)
+
         firstname, lastname = _split_name(job.get("contact_name", ""))
+
+        # Must have a first name — HubSpot needs it for email personalisation
+        if not firstname:
+            logger.info(f"Skipping {email}: no first name available")
+            continue
+
         jobtitle = job.get("title", "")
 
         contact_id = _upsert_contact(api_key, email, firstname, lastname, jobtitle)
