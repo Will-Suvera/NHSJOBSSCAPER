@@ -1,4 +1,4 @@
-"""Slack webhook notifications."""
+"""Slack notifications via Bot Token API."""
 
 import logging
 import time
@@ -7,6 +7,8 @@ from collections import Counter
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+CHANNEL_ID = "C08K93Y0USD"  # #nhs-job-listings
 
 ROLE_CATEGORIES = [
     ("gp", "GP"),
@@ -32,20 +34,45 @@ def _categorise(title):
     return "Other"
 
 
-def _post(webhook_url, payload):
-    """POST JSON to Slack webhook. Returns True on success."""
+def _post(bot_token, text):
+    """Post a message to the channel. Returns message timestamp or None."""
     try:
         resp = requests.post(
-            webhook_url,
-            json=payload,
-            headers={"Content-Type": "application/json"},
+            "https://slack.com/api/chat.postMessage",
+            headers={
+                "Authorization": f"Bearer {bot_token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            json={"channel": CHANNEL_ID, "text": text},
             timeout=10,
         )
-        resp.raise_for_status()
-        return True
+        data = resp.json()
+        if data.get("ok"):
+            return data.get("ts")
+        logger.error(f"Slack post failed: {data.get('error')}")
+        return None
     except requests.RequestException as e:
         logger.error(f"Slack send failed: {e}")
-        return False
+        return None
+
+
+def _react(bot_token, ts, emoji="white_check_mark"):
+    """Add an emoji reaction to a message."""
+    try:
+        resp = requests.post(
+            "https://slack.com/api/reactions.add",
+            headers={
+                "Authorization": f"Bearer {bot_token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            json={"channel": CHANNEL_ID, "timestamp": ts, "name": emoji},
+            timeout=10,
+        )
+        data = resp.json()
+        if not data.get("ok"):
+            logger.warning(f"Reaction failed: {data.get('error')}")
+    except requests.RequestException as e:
+        logger.warning(f"Reaction failed: {e}")
 
 
 def _format_job(job):
@@ -96,10 +123,17 @@ def _format_job(job):
     return "\n".join(lines)
 
 
-def send_update(webhook_url, new_jobs, total_active, sheet_url, emailed_ids=None):
-    """Send summary message, then one message per new job."""
+def send_update(slack_config, new_jobs, total_active, sheet_url, emailed_ids=None):
+    """Send summary message, then one message per new job.
+
+    slack_config: either a bot token (xoxb-...) or webhook URL for backwards compat.
+    """
     if emailed_ids is None:
         emailed_ids = set()
+
+    # Detect if we have a bot token or webhook URL
+    is_bot = slack_config.startswith("xoxb-")
+
     today = datetime.now().strftime("%-d %b %Y")
     count = len(new_jobs)
 
@@ -109,7 +143,11 @@ def send_update(webhook_url, new_jobs, total_active, sheet_url, emailed_ids=None
             f"No new listings today. {total_active} active roles tracked.\n"
             f"<{sheet_url}|View full tracker>"
         )
-        return _post(webhook_url, {"text": text})
+        if is_bot:
+            _post(slack_config, text)
+        else:
+            _post_webhook(slack_config, text)
+        return True
 
     # --- Summary message ---
     emailed_count = sum(1 for j in new_jobs if j.get("job_id") in emailed_ids)
@@ -131,25 +169,54 @@ def send_update(webhook_url, new_jobs, total_active, sheet_url, emailed_ids=None
         f"_{total_active} active listings tracked_\n"
         f"<{sheet_url}|:bar_chart: View full tracker>"
     )
-    _post(webhook_url, {"text": summary})
+
+    if is_bot:
+        _post(slack_config, summary)
+    else:
+        _post_webhook(slack_config, summary)
 
     # --- Individual job messages ---
     for i, job in enumerate(new_jobs):
         if i > 0:
             time.sleep(1)  # respect Slack rate limits
-        prefix = ":white_check_mark: " if job.get("job_id") in emailed_ids else ""
-        text = prefix + _format_job(job)
-        _post(webhook_url, {"text": text})
+        text = _format_job(job)
+
+        if is_bot:
+            ts = _post(slack_config, text)
+            # Add ✅ reaction if this contact was emailed
+            if ts and job.get("job_id") in emailed_ids:
+                _react(slack_config, ts)
+        else:
+            _post_webhook(slack_config, text)
+
         logger.info(f"Sent Slack message {i + 1}/{count}")
 
     return True
 
 
-def send_error(webhook_url, error_message):
+def send_error(slack_config, error_message):
     """Send error alert."""
     today = datetime.now().strftime("%-d %b %Y")
     text = (
         f":rotating_light: *NHS Jobs Scraper Failed — {today}*\n"
         f"```{error_message}```"
     )
-    return _post(webhook_url, {"text": text})
+    if slack_config.startswith("xoxb-"):
+        return _post(slack_config, text)
+    return _post_webhook(slack_config, text)
+
+
+def _post_webhook(webhook_url, text):
+    """Legacy: POST to Slack webhook. Returns True on success."""
+    try:
+        resp = requests.post(
+            webhook_url,
+            json={"text": text},
+            headers={"Content-Type": "application/json"},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        return True
+    except requests.RequestException as e:
+        logger.error(f"Slack webhook failed: {e}")
+        return False

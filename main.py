@@ -22,7 +22,7 @@ def main():
     # --- Load config from env ---
     credentials_json = os.getenv("GOOGLE_CREDENTIALS_JSON", "")
     spreadsheet_id = os.getenv("SPREADSHEET_ID", "")
-    slack_url = os.getenv("SLACK_WEBHOOK_URL", "")
+    slack_token = os.getenv("SLACK_BOT_TOKEN", "") or os.getenv("SLACK_WEBHOOK_URL", "")
     hubspot_key = os.getenv("HUBSPOT_API_KEY", "")
 
     if not credentials_json:
@@ -44,8 +44,8 @@ def main():
 
         if not jobs:
             logger.warning("No jobs found — possible site issue")
-            if slack_url:
-                send_error(slack_url, "Scraper returned 0 jobs — this may indicate a problem")
+            if slack_token:
+                send_error(slack_token, "Scraper returned 0 jobs — this may indicate a problem")
             return
 
         # 3. Filter to only new jobs
@@ -69,9 +69,9 @@ def main():
             logger.info("Step 5: HubSpot not configured, skipping")
 
         # 6. Send Slack notification
-        if slack_url:
+        if slack_token:
             logger.info("Step 6: Sending Slack notification...")
-            send_update(slack_url, new_jobs, len(jobs), sheet_url, emailed_ids=emailed_ids)
+            send_update(slack_token, new_jobs, len(jobs), sheet_url, emailed_ids=emailed_ids)
         else:
             logger.info("Step 6: Slack not configured, skipping")
 
@@ -79,8 +79,8 @@ def main():
 
     except Exception as e:
         logger.exception("Pipeline failed")
-        if slack_url:
-            send_error(slack_url, str(e))
+        if slack_token:
+            send_error(slack_token, str(e))
         sys.exit(1)
 
 
